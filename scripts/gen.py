@@ -2,7 +2,7 @@ import os, subprocess, argparse
 import pandas as pd
 from pybedtools import BedTool
 
-tsv_keep = ["chr", "TSS_start", "TSS_end", "gene_name", "gex", "strand"]
+tsv_keep = ["chr", "TSS_start", "TSS_end", "gene_name", "gex", "strand", "gene_start", "gene_end"]
 
 dnase_keep = [
     *tsv_keep,
