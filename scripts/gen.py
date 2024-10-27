@@ -2,19 +2,21 @@ import os, subprocess, argparse
 import pandas as pd
 from pybedtools import BedTool
 
-tsv_keep = [
-    "chr",
-    "TSS_start",
-    "TSS_end",
-    "gene_name",
-    "gex",
-    "strand",
-    "gene_start",
-    "gene_end",
-]
+def tsv_keep(cell: str = "X1"):
+    x = [
+        "chr",
+        "TSS_start",
+        "TSS_end",
+        "gene_name",
+        "strand",
+        "gene_start",
+        "gene_end",
+    ]
+    cell != "X3" and x.append("gex")
+    return x
 
-dnase_keep = lambda h: [
-    *tsv_keep,
+dnase_keep = lambda h, cell: [
+    *tsv_keep(cell),
     "dsc_1",
     f"{h}_start",
     f"{h}_end",
@@ -28,8 +30,8 @@ dnase_keep = lambda h: [
     # "dnase_dist",
 ]
 
-num_peaks_keep = lambda h: [
-    *tsv_keep,
+num_peaks_keep = lambda h, cell: [
+    *tsv_keep(cell),
     f"{h}_chr",
     f"{h}_start",
     f"{h}_end",
@@ -46,14 +48,19 @@ num_peaks_keep = lambda h: [
 def tsvLoader(
     cell: str = "X1", type: str = "train", scratch: str = "./data/tmp"
 ) -> BedTool:
-    file = pd.concat(
-        [
-            pd.read_csv(f"./data/CAGE-train/{cell}_{type}_info.tsv", sep="\t"),
-            pd.read_csv(f"./data/CAGE-train/{cell}_{type}_y.tsv", sep="\t")[["gex"]],
-        ],
-        axis=1,
-    )
-    file.loc[:, tsv_keep].to_csv(
+    if cell == "X3":
+        file = pd.read_csv(f"./data/CAGE-train/{cell}_{type}_info.tsv", sep="\t")
+    else:
+        file = pd.concat(
+            [
+                pd.read_csv(f"./data/CAGE-train/{cell}_{type}_info.tsv", sep="\t"),
+                pd.read_csv(f"./data/CAGE-train/{cell}_{type}_y.tsv", sep="\t")[
+                    ["gex"]
+                ],
+            ],
+            axis=1,
+        )
+    file.loc[:, tsv_keep(cell)].to_csv(
         scratch + "/tmp_tsv.bed", sep="\t", header=False, index=False
     )
     os.environ["LC_ALL"] = "C"
@@ -87,7 +94,7 @@ def bedLoader(cell: str = "X1", data: str = "DNase") -> BedTool:
 def DNase(tsv: BedTool, final: pd.DataFrame, cell: str = "X1") -> pd.DataFrame:
     h = "DNase"
     bed = bedLoader(cell=cell, data=h)
-    peaks = tsv.window(bed, w=140).to_dataframe(names=dnase_keep(h))
+    peaks = tsv.window(bed, w=140).to_dataframe(names=dnase_keep(h, cell))
     peaks = (
         peaks.groupby("gene_name")
         .agg(
@@ -117,7 +124,7 @@ def H3K4me1(tsv: BedTool, final: pd.DataFrame, cell: str = "X1") -> pd.DataFrame
         tsv.slop(b=60, genome="hg38")
         .flank(l=120, r=70, genome="hg38")
         .intersect(bed, wb=True)
-        .to_dataframe(names=num_peaks_keep(h))
+        .to_dataframe(names=num_peaks_keep(h, cell))
     )
     peaks = (
         peaks.groupby("gene_name")
@@ -148,7 +155,7 @@ def H3K4me3(tsv: BedTool, final: pd.DataFrame, cell: str = "X1") -> pd.DataFrame
         tsv.slop(b=10, genome="hg38")
         .flank(l=400, r=100, genome="hg38")
         .intersect(bed, wb=True)
-        .to_dataframe(names=num_peaks_keep(h))
+        .to_dataframe(names=num_peaks_keep(h, cell))
     )
     peaks = (
         peaks.groupby("gene_name")
@@ -179,7 +186,7 @@ def H3K27ac(tsv: BedTool, final: pd.DataFrame, cell: str = "X1") -> pd.DataFrame
         tsv.slop(b=10, genome="hg38")
         .flank(l=270, r=70, genome="hg38")
         .intersect(bed, wb=True)
-        .to_dataframe(names=num_peaks_keep(h))
+        .to_dataframe(names=num_peaks_keep(h, cell))
     )
     peaks = (
         peaks.groupby("gene_name")
@@ -211,16 +218,19 @@ if __name__ == "__main__":
 
     tsv = tsvLoader(cell=args.cell, type=args.type)
 
-    final = tsv.to_dataframe(names=tsv_keep)
+    final = tsv.to_dataframe(names=tsv_keep(args.cell))
     final = DNase(tsv, final, args.cell)
     final = H3K4me1(tsv, final, args.cell)
     final = H3K4me3(tsv, final, args.cell)
     final = H3K27ac(tsv, final, args.cell)
 
     os.makedirs(f"./data/{args.cell}-{args.type}", exist_ok=True)
-    final.drop(columns="gex").to_csv(
-        f"./data/{args.cell}-{args.type}/features.tsv",
-        sep="\t",
-        index=None,
-    )
-    final.gex.to_csv(f"./data/{args.cell}-{args.type}/y.tsv", sep="\t", index=None)
+    if args.cell == "X3":
+        final.to_csv(
+            f"./data/{args.cell}-{args.type}/features.tsv", sep="\t", index=None
+        )
+    else:
+        final.drop(columns="gex").to_csv(
+            f"./data/{args.cell}-{args.type}/features.tsv", sep="\t", index=None
+        )
+        final.gex.to_csv(f"./data/{args.cell}-{args.type}/y.tsv", sep="\t", index=None)
