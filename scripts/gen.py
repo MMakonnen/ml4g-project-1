@@ -2,21 +2,30 @@ import os, subprocess, argparse
 import pandas as pd
 from pybedtools import BedTool
 
-tsv_keep = ["chr", "TSS_start", "TSS_end", "gene_name", "gex", "strand", "gene_start", "gene_end"]
+tsv_keep = [
+    "chr",
+    "TSS_start",
+    "TSS_end",
+    "gene_name",
+    "gex",
+    "strand",
+    "gene_start",
+    "gene_end",
+]
 
-dnase_keep = [
+dnase_keep = lambda h: [
     *tsv_keep,
     "dsc_1",
-    "dnase_start",
-    "dnase_end",
+    f"{h}_start",
+    f"{h}_end",
     "dsc_2",
     "dsc_3",
     "dsc_4",
-    "dnase_val",
+    f"{h}_val",
     "dsc_5",
     "dsc_6",
     "dsc_7",
-    "dnase_dist",
+    # "dnase_dist",
 ]
 
 num_peaks_keep = lambda h: [
@@ -75,6 +84,125 @@ def bedLoader(cell: str = "X1", data: str = "DNase") -> BedTool:
     return BedTool(f"./data/tmp/tmp-{data}.bed")
 
 
+def DNase(tsv: BedTool, final: pd.DataFrame, cell: str = "X1") -> pd.DataFrame:
+    h = "DNase"
+    bed = bedLoader(cell=cell, data=h)
+    peaks = tsv.window(bed, w=140).to_dataframe(names=dnase_keep(h))
+    peaks = (
+        peaks.groupby("gene_name")
+        .agg(
+            **{
+                f"{h}_num_peaks": (f"{h}_val", "count"),
+                f"{h}_avg_peaks": (f"{h}_val", "mean"),
+            }
+        )
+        .reset_index()
+    )
+    final = pd.merge(
+        final,
+        peaks,
+        on="gene_name",
+        how="left",
+    )
+    del peaks
+    final.fillna({f"{h}_num_peaks": 0}, inplace=True)
+    final.fillna({f"{h}_avg_peaks": 0}, inplace=True)
+    return final
+
+
+def H3K4me1(tsv: BedTool, final: pd.DataFrame, cell: str = "X1") -> pd.DataFrame:
+    h = "H3K4me1"
+    bed = bedLoader(cell=cell, data=h)
+    peaks = (
+        tsv.slop(b=60, genome="hg38")
+        .flank(l=120, r=70, genome="hg38")
+        .intersect(bed, wb=True)
+        .to_dataframe(names=num_peaks_keep(h))
+    )
+    peaks = (
+        peaks.groupby("gene_name")
+        .agg(
+            **{
+                f"{h}_num_peaks": (f"{h}_signal", "count"),
+                f"{h}_avg_peaks": (f"{h}_signal", "mean"),
+            }
+        )
+        .reset_index()
+    )
+    final = pd.merge(
+        final,
+        peaks,
+        on="gene_name",
+        how="left",
+    )
+    del peaks
+    final.fillna({f"{h}_num_peaks": 0}, inplace=True)
+    final.fillna({f"{h}_avg_peaks": 0}, inplace=True)
+    return final
+
+
+def H3K4me3(tsv: BedTool, final: pd.DataFrame, cell: str = "X1") -> pd.DataFrame:
+    h = "H3K4me3"
+    bed = bedLoader(cell=cell, data=h)
+    peaks = (
+        tsv.slop(b=10, genome="hg38")
+        .flank(l=400, r=100, genome="hg38")
+        .intersect(bed, wb=True)
+        .to_dataframe(names=num_peaks_keep(h))
+    )
+    peaks = (
+        peaks.groupby("gene_name")
+        .agg(
+            **{
+                f"{h}_num_peaks": (f"{h}_signal", "count"),
+                f"{h}_avg_peaks": (f"{h}_signal", "mean"),
+            }
+        )
+        .reset_index()
+    )
+    final = pd.merge(
+        final,
+        peaks,
+        on="gene_name",
+        how="left",
+    )
+    del peaks
+    final.fillna({f"{h}_num_peaks": 0}, inplace=True)
+    final.fillna({f"{h}_avg_peaks": 0}, inplace=True)
+    return final
+
+
+def H3K27ac(tsv: BedTool, final: pd.DataFrame, cell: str = "X1") -> pd.DataFrame:
+    h = "H3K27ac"
+    bed = bedLoader(cell=cell, data=h)
+    peaks = (
+        tsv.slop(b=10, genome="hg38")
+        .flank(l=270, r=70, genome="hg38")
+        .intersect(bed, wb=True)
+        .to_dataframe(names=num_peaks_keep(h))
+    )
+    peaks = (
+        peaks.groupby("gene_name")
+        .agg(
+            **{
+                f"{h}_num_peaks": (f"{h}_signal", "count"),
+                f"{h}_avg_peaks": (f"{h}_signal", "mean"),
+            }
+        )
+        .reset_index()
+    )
+    final = pd.merge(
+        final,
+        peaks,
+        on="gene_name",
+        how="left",
+    )
+    del peaks
+    final.fillna({f"{h}_num_peaks": 0}, inplace=True)
+    final.fillna({f"{h}_avg_peaks": 0}, inplace=True)
+    return final
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="specify cells and")
     parser.add_argument("-c", "--cell", type=str, help="which cell line")
@@ -82,40 +210,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     tsv = tsvLoader(cell=args.cell, type=args.type)
-    bed = bedLoader(cell=args.cell)
-    intersect = tsv.closest(bed, d=True, t="first").to_dataframe(names=dnase_keep)
-    final = intersect.drop(columns=[f"dsc_{i}" for i in range(1, 8)])
-    del intersect
-    histones = ["H3K4me3", "H3K27ac"]
-    for h in histones:
-        bed = bedLoader(cell=args.cell, data=h)
-        num_peaks = tsv.window(bed, w=2000).to_dataframe(names=num_peaks_keep(h))
-        closest_peak = tsv.closest(bed, d=True, t="first").to_dataframe(
-            names=[
-                *num_peaks_keep(h),
-                f"{h}_distance",
-            ]
-        )
-        peak_summary = (
-            num_peaks.groupby("gene_name")
-            .agg(
-                **{
-                    f"{h}_num_peaks": (f"{h}_signal", "count"),
-                    f"{h}_avg_peaks": (f"{h}_signal", "mean"),
-                }
-            )
-            .reset_index()
-        )
-        peak_summary = pd.merge(
-            closest_peak[["gene_name", f"{h}_signal", f"{h}_distance"]],
-            peak_summary,
-            on="gene_name",
-            how="left",
-        )
-        peak_summary.fillna({f"{h}_num_peaks": 0}, inplace=True)
-        peak_summary.fillna({f"{h}_avg_peaks": 0}, inplace=True)
-        final = pd.merge(final, peak_summary, on="gene_name", how="left")
-    del num_peaks, peak_summary
+
+    final = tsv.to_dataframe(names=tsv_keep)
+    final = DNase(tsv, final, args.cell)
+    final = H3K4me1(tsv, final, args.cell)
+    final = H3K4me3(tsv, final, args.cell)
+    final = H3K27ac(tsv, final, args.cell)
+
     os.makedirs(f"./data/{args.cell}-{args.type}", exist_ok=True)
     final.drop(columns="gex").to_csv(
         f"./data/{args.cell}-{args.type}/features.tsv",
