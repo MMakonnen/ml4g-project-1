@@ -41,7 +41,7 @@ lightgbm_params = {
 }
 
 
-def extend_df(df, cols_to_keep):
+def extend_df(df: pd.DataFrame, cols_to_keep: list[str]) -> pd.DataFrame:
     # Add a binary column for strand
     df["strand_binary"] = df["strand"].map({"+": 1, "-": 0})
 
@@ -59,7 +59,7 @@ def extend_df(df, cols_to_keep):
     return df[cols_to_keep + new_cols]
 
 
-def train_model():
+def train_model() -> lgb.Booster:
     X_1_train = pd.read_csv(X_1_train_path, sep="\t")
     y_1_train = pd.read_csv(y_1_train_path, sep="\t")
 
@@ -120,7 +120,7 @@ def train_model():
     return model
 
 
-def eval_model(model):
+def eval_model(model: lgb.Booster) -> pd.DataFrame:
     # load initial test data for initial gene name order (before feature engineering)
     original_test = pd.read_csv(X_3_test_path_orig, sep="\t")
     gene_names_orig_order = original_test["gene_name"]
@@ -151,7 +151,7 @@ def eval_model(model):
     return final_preds
 
 
-def export(preds, name):
+def export(preds: pd.DataFrame, name: str) -> None:
     save_dir = "."
     file_name = "gex_predicted.csv"
     zip_name = f"{name}_Project1.zip"
@@ -163,7 +163,7 @@ def export(preds, name):
     )
 
 
-def pipeline(argv):
+def pipeline(argv) -> None:
     model = train_model()
     preds = eval_model(model)
     if len(argv) > 2:

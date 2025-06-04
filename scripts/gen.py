@@ -5,7 +5,7 @@ import pandas as pd
 from pybedtools import BedTool
 
 
-def tsv_keep(cell: str = "X1"):
+def tsv_keep(cell: str = "X1") -> list[str]:
     x = [
         "chr",
         "TSS_start",
@@ -19,8 +19,8 @@ def tsv_keep(cell: str = "X1"):
     return x
 
 
-def dnase_keep(h, cell):
-    [
+def dnase_keep(h, cell) -> list[str]:
+    return [
         *tsv_keep(cell),
         "dsc_1",
         f"{h}_start",
@@ -36,8 +36,8 @@ def dnase_keep(h, cell):
     ]
 
 
-def num_peaks_keep(h, cell):
-    [
+def num_peaks_keep(h, cell) -> list[str]:
+    return [
         *tsv_keep(cell),
         f"{h}_chr",
         f"{h}_start",
