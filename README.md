@@ -5,4 +5,7 @@ We require `uv` for dependency management. Please read [lightgbm](https://pypi.o
 ```bash
 uv sync
 uv run main.py
+
+# to generate the submission zip, Hancock_John_Project1.zip
+uv run main.py John Hancock
 ```
